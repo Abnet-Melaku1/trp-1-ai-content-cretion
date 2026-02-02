@@ -103,18 +103,15 @@ class GoogleVeoProvider:
         logger.debug(f"   Model: {model}")
 
         try:
-            # Build config
-            config = types.GenerateVideoConfig(
-                aspect_ratio=aspect_ratio,
-                person_generation=person_generation,
-            )
+            # Build config (google-genai uses GenerateVideosConfig; omit person_generation - API rejects it)
+            config = types.GenerateVideosConfig(aspect_ratio=aspect_ratio)
 
             # Generate
             if first_frame_url:
                 # Image-to-video
                 image_data = await self._fetch_image(first_frame_url)
                 image = types.Image(image_bytes=image_data)
-                operation = await client.aio.models.generate_video(
+                operation = await client.aio.models.generate_videos(
                     model=model,
                     prompt=prompt,
                     image=image,
@@ -122,7 +119,7 @@ class GoogleVeoProvider:
                 )
             else:
                 # Text-to-video
-                operation = await client.aio.models.generate_video(
+                operation = await client.aio.models.generate_videos(
                     model=model,
                     prompt=prompt,
                     config=config,
@@ -134,17 +131,66 @@ class GoogleVeoProvider:
                 await asyncio.sleep(5)
                 operation = await client.aio.operations.get(operation)
 
-            if not operation.response or not operation.response.generated_videos:
+            # One more fetch after done (API may lag populating response)
+            operation = await client.aio.operations.get(operation)
+
+            # Check for API error (operation can be done but failed)
+            if getattr(operation, "error", None):
+                err_msg = str(operation.error) if operation.error else "Operation failed"
+                logger.error(f"   Veo operation error: {err_msg}")
                 return GenerationResult(
                     success=False,
                     provider=self.name,
                     content_type="video",
-                    error="No video generated",
+                    error=err_msg,
                 )
 
-            # Get video data
-            video = operation.response.generated_videos[0]
+            # Response may be in .response or .result
+            response = getattr(operation, "response", None) or getattr(operation, "result", None)
+            generated = getattr(response, "generated_videos", None) if response else None
+            # generated_videos can be empty when RAI (content policy) filtered the output
+            if not generated or len(generated) == 0:
+                rai_count = getattr(response, "rai_media_filtered_count", None) if response else None
+                rai_reasons = getattr(response, "rai_media_filtered_reasons", None) if response else None
+                err_parts = ["No video in response"]
+                if rai_count is not None and rai_count > 0:
+                    err_parts.append("content likely filtered by safety policy (RAI)")
+                    if rai_reasons:
+                        err_parts.append(f"reasons={rai_reasons}")
+                elif getattr(operation, "error", None):
+                    err_parts.append(str(operation.error))
+                err_detail = "; ".join(str(p) for p in err_parts)
+                logger.warning(f"   Veo: {err_detail}")
+                return GenerationResult(
+                    success=False,
+                    provider=self.name,
+                    content_type="video",
+                    error=err_detail,
+                )
+
+            # Get video data (API may return bytes inline or via File reference)
+            video = generated[0]
             video_data = video.video.video_bytes
+            if video_data is None:
+                try:
+                    video_data = await client.aio.files.download(file=video.video)
+                except Exception:
+                    uri = getattr(video.video, "uri", None)
+                    if uri and isinstance(uri, str) and uri.startswith("http"):
+                        import httpx
+                        async with httpx.AsyncClient(timeout=120.0) as http_client:
+                            resp = await http_client.get(uri)
+                            resp.raise_for_status()
+                            video_data = resp.content
+                    else:
+                        video_data = None
+            if not video_data:
+                return GenerationResult(
+                    success=False,
+                    provider=self.name,
+                    content_type="video",
+                    error="No video data in response",
+                )
 
             # Save
             if output_path:
