@@ -1,7 +1,7 @@
 # TRP 1 - AI Content Generation Challenge — Submission
 
-**Candidate:** [Your Name]  
-**Date:** [Submission Date]
+**Candidate:** Abnet Melaku 
+**Date:** Feb 2 - 2026
 
 ---
 
@@ -84,7 +84,7 @@
 - [x] `exploration/PROVIDERS.md`
 - [x] `exploration/PRESETS.md`
 - [ ] At least 2 generated audio files
-- [ ] At least 1 generated video file (or documented attempt)
+- [x] At least 1 generated video file (or documented attempt)
 - [x] `SUBMISSION.md` (this file — fill in [placeholders])
 - [x] YouTube link(s) in section 6
 - [x] GitHub repo link in section 6
