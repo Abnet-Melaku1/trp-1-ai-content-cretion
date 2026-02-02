@@ -8,7 +8,7 @@
 ## 1. Environment Setup Documentation
 
 **APIs configured:**
-- **Google Gemini** (`GEMINI_API_KEY`) — used for Lyria (music) and Veo (video).
+- **Google Gemini** (`GEMINI_API_KEY`) — used for Lyria (music) and Veo (video). Note: I had to use my friend’s credit card to enable/billing for the Gemini API.
 - **AIMLAPI** (`AIMLAPI_KEY`) — optional, for MiniMax music with vocals.
 - **Kling** (`KLINGAI_API_KEY`, `KLINGAI_SECRET_KEY`) — optional; used when Veo had issues. Note: nested settings don’t load from `.env`; credentials must be in the shell environment (e.g. `export KLINGAI_API_KEY=...` then run the command).
 
